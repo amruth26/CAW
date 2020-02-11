@@ -5,6 +5,8 @@ const JWT = require('jsonwebtoken');
 var jwtsecret = "xxxxx.yyyyy.zzzzz";
 var MongoClient = require('mongodb').MongoClient;
 var db;
+var md5 = require('md5');
+
 createMongoConnection()
 function createMongoConnection() {
 
@@ -34,7 +36,7 @@ app.post('/sign_up', function (req, res) {
     var data = {
         "name": name,
         "email": email,
-        "password": pass,
+        "password": md5(pass), // password encryption
         "phone": phone
     }
     let findObject = {
@@ -86,17 +88,17 @@ app.post('/login', function (req, res) {
     }
     if (email != undefined && pass != undefined && email.length > 0 && pass.length > 0) {
         db.collection('Users').find(findObject).toArray(function (err, userDetails) {
-            console.log(existed)
             if (err) {
-
                 res.send({ "status": "error", "message": "Error while login", "status_code": "DBERR" });
             }
             else if (userDetails && userDetails.length > 0) {
-                if (userDetails.validPassword(password)) {
-                    userDetails = JSON.parse(JSON.stringify(userDetails));
-                    let token = JWT.sign(userDetails, jwtsecret); // Token to be stored in localstorage for authentication
+                console.log(userDetails,  md5(pass))
+                let user = userDetails[0]
+                if (user.password == md5(pass)) {
+                    user = JSON.parse(JSON.stringify(user));
+                    let token = JWT.sign(user, jwtsecret); // Token to send in headers for every request for authentication
                     return res.send({ "status": "success", "message": "User Logged in successfully", "data": { "token": token }, "status_code": "LOGINSUCCESS" })
-                } // Mongodb Method for validating password with encryted password which was stored at signup
+                } 
                 else {
                     res.send({ "status": "error", "message": "Inorrect password !!", "status_code": "PWDERR" });
                 }
@@ -114,11 +116,11 @@ app.post('/login', function (req, res) {
 
 
 app.post('/get-movies', userAuthentication, function (req, res) {
-    // let city = req.body.city != undefined ? req.body.city : '';
-    // if(city != undefined && city.length > 0){
-    //       let findObject = {
-    //           "city" : city
-    //       }
+    let city = req.body.city != undefined ? req.body.city : '';
+    if(city != undefined && city.length > 0){
+          let findObject = {
+              "city" : city
+          }
     // Movies Collection will have the data of movies in that city
     db.collection('Movies').find(findObject).toArray(function (err, moviesDetails) {
         console.log(moviesDetails)
@@ -136,14 +138,14 @@ app.post('/get-movies', userAuthentication, function (req, res) {
         }
     });
 
-    // }else{
-    //    res.send({"status" : "error", "message" : "Mandatory fields are missing !!", "status_code" : "USERDETAILS"});
-    // }
+    }else{
+       res.send({"status" : "error", "message" : "Mandatory fields are missing !!", "status_code" : "USERDETAILS"});
+    }
 
 });
 
 
-app.post('/get-theatres', userAuthentication, function (req, res) {
+app.post('/get-theatres',  userAuthentication, function (req, res) {
     let movie_id = req.body.movie_id != undefined ? req.body.movie_id : '';
     if (movie_id != undefined && movie_id.length > 0) {
         let findObject = {
@@ -173,7 +175,7 @@ app.post('/get-theatres', userAuthentication, function (req, res) {
 })
 
 
-app.post('/get-seats', userAuthentication, function (req, res) {
+app.post('/get-seats',  userAuthentication, function (req, res) {
     let movie_id = req.body.movie_id != undefined ? req.body.movie_id : '';
     let theatre_id = req.body.theatre_id != undefined ? req.body.theatre_id : '';
     let show_time = req.body.show_time != undefined ? req.body.show_time : '';
@@ -250,23 +252,24 @@ app.post('/book-seats', userAuthentication, function (req, res) {
 
 
 
-var userAuthentication = function (api_request, api_response, next_service) {
+var userAuthentication = function (api_request, api_response, next) {
+    console.log("in auth", api_request.headers)
     var authentication_token = api_request.headers['x-access-token'];
     if (authentication_token) {
         JWT.verify(authentication_token, jwtsecret, function (token_verify_error, token_data) {
             if (token_verify_error) {
-                api_response.send({ "status": "error", "message": "User Authentiication failed", "status_code": "USERUNAUTH" });
+                return api_response.send({ "status": "error", "message": "User Authentiication failed", "status_code": "USERUNAUTH" });
             }
             else if (token_data) {
-                next_service();
+                next();
 
             } else {
-                api_response.send({ "status": "error", "message": "User Not Authorized", "status_code": "USERUNAUTH" });
+               return  api_response.send({ "status": "error", "message": "User Not Authorized", "status_code": "USERUNAUTH" });
             }
         });
 
     } else {
-        api_response.send({ "status": "error", "message": "Authentication token not found in request.", "status_code": "USERUNAUTH" });
+       return  api_response.send({ "status": "error", "message": "Authentication token not found in request.", "status_code": "USERUNAUTH" });
 
     }
 };
@@ -281,3 +284,6 @@ app.listen(3000)
 
 console.log("server listening at port 3000");
 
+module.exports = {
+    userAuthentication : userAuthentication,
+}
