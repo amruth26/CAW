@@ -115,7 +115,7 @@ module.exports = {
                 res.send({ "status": "error", "message": "Error while gettig users", "status_code": "DBERR" });
             }
             else if (usersDetails && usersDetails.length > 0) {
-                res.send({ "status": "success", "message": "successfully  got users list", "data": { "movieuserss": usersDetails }, "status_code": "SUCCESS" });
+                res.send({ "status": "success", "message": "successfully  got users list", "data": { "users": usersDetails }, "status_code": "SUCCESS" });
 
             }
             else {
